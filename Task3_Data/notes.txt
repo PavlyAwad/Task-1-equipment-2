@@ -1,0 +1,19 @@
+00001 : sinusrhythmus periphere niederspannung
+        Sinus rhythm, peripheral low voltage.
+
+00015 : sinus arrhythmie sonst normales ekg
+        Sinus arrhythmia, otherwise normal ECG.
+
+21804 : tachykardes vorhofflimmern lagetyp normal st & t abnorm, wahrscheinlich    anteriore ischÃ„mie oder linksbelastung    inferiore ischÃ„mie oder linksbelastung 4.46                          unbestÃ„tigter bericht
+        Tachycardic atrial fibrillation, axis type normal, abnormal ST & T, likely anterior ischemia or left heart strain, inferior ischemia or left heart strain. 4.46. Unconfirmed report."
+
+00228 : sinus arrhythmie linkstyp sonst normales ekg
+       Sinus arrhythmia, left axis deviation, otherwise normal ECG.
+ 0602 sinus bradycardia
+ 06013  atrial fibirillation
+06054 normal
+
+16033 normal
+
+16100 sinus rythme with low voltage
+16923 normal with variant bpm

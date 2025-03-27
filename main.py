@@ -11,6 +11,9 @@ from scipy.signal import find_peaks, butter, filtfilt
 import os
 import glob
 import sys
+import numpy as np
+from scipy.signal import welch
+import scipy.signal as signal
 
 import numpy as np
 from scipy.signal import butter, filtfilt, find_peaks, welch
@@ -50,51 +53,104 @@ class ECGProcessor:
         hr = 60000 / np.mean(rr_intervals)  # beats per minute
         return hr
 
+
+
     def detect_arrhythmia_type(self, signal, peaks):
-        """Enhanced arrhythmia detection with specific condition identification"""
+        """Enhanced arrhythmia detection with debugging"""
         if len(peaks) < 3:
             return "Normal Sinus Rhythm"
 
-        rr_intervals = np.diff(peaks) / self.fs * 1000  # in ms
+        # RR Intervals (in ms)
+        rr_intervals = np.diff(peaks) / self.fs * 1000
         mean_rr = np.mean(rr_intervals)
         std_rr = np.std(rr_intervals)
-        cv = std_rr / mean_rr  # Coefficient of variation
+        rmssd = np.sqrt(np.mean(np.square(np.diff(rr_intervals))))
+        nn50 = np.sum(np.abs(np.diff(rr_intervals)) > 50) / len(rr_intervals)
+        hr = 60000 / mean_rr  # Heart rate in bpm
 
-        # Calculate QRS amplitudes (for low voltage detection)
-        qrs_amplitudes = [np.max(signal[peaks[i]-10:peaks[i]+10]) -
-                         np.min(signal[peaks[i]-10:peaks[i]+10])
-                         for i in range(len(peaks))]
+        print(f"\n=== RR INTERVAL ANALYSIS ===")
+        print(f"Mean RR: {mean_rr:.2f} ms, Std RR: {std_rr:.2f} ms")
+        print(f"RMSSD: {rmssd:.2f}, NN50: {nn50:.2f}, HR: {hr:.2f} bpm")
+
+        # Power Spectral Density (PSD) for AFib
+        f, psd = welch(rr_intervals, fs=1, nperseg=len(rr_intervals))
+        lf_power = np.sum(psd[(f >= 0.04) & (f <= 0.15)])
+        hf_power = np.sum(psd[(f >= 0.15) & (f <= 0.4)])
+
+        lf_hf_ratio = lf_power / (hf_power + 1e-6)  # Avoid division by zero
+
+        print(f"\n=== POWER SPECTRAL DENSITY ===")
+        print(f"LF Power: {lf_power:.4f}, HF Power: {hf_power:.4f}, LF/HF Ratio: {lf_hf_ratio:.4f}")
+
+        # QRS Amplitude Calculation
+        qrs_amplitudes = [
+            np.max(signal[max(0, peak-10):min(len(signal), peak+10)]) -
+            np.min(signal[max(0, peak-10):min(len(signal), peak+10)])
+             for peak in peaks
+                    ]
         avg_amplitude = np.mean(qrs_amplitudes)
 
-        # Power Spectral Density (PSD) analysis for AFib detection
-        f, psd = welch(rr_intervals, fs=1, nperseg=len(rr_intervals))
-        fibrillatory_power = np.sum(psd[(f >= 0.15) & (f <= 0.4)])
+        print(f"\n=== QRS AMPLITUDE ===")
+        print(f"Avg QRS Amplitude: {avg_amplitude:.4f}")
 
-        # 1. Low Voltage Detection
-        if avg_amplitude < 0.5:
-            if 50 < (60000/mean_rr) < 100 and cv < 0.1:
-                return "Sinus Rhythm with Low Voltage"
+        # 1. Low Voltage QRS
+        #if avg_amplitude < 0.5 and 50 < hr < 100 and std_rr / mean_rr < 0.1:
+            #return "Sinus Rhythm with Low Voltage"
 
-        # 2. Sinus Arrhythmia with HRV spectral analysis
-        if 0.1 < cv < 0.2 and 50 < (60000/mean_rr) < 100:
-            if self._has_respiratory_pattern(rr_intervals):
-                return "Sinus Arrhythmia (Normal Variant)"
+        # # 2. Sinus Arrhythmia
+        # if 0.1 < std_rr / mean_rr < 0.2 and 50 < hr < 100 and self._has_respiratory_pattern(rr_intervals):
+        #     return "Sinus Arrhythmia"
 
-        # 3. Atrial Fibrillation
-        if cv > 0.25 and fibrillatory_power > 0.1:
-            if self._p_wave_absence(signal, peaks):
-                hr = 60000 / mean_rr
-                if hr > 100:
-                    return "Tachycardic Atrial Fibrillation"
-                return "Atrial Fibrillation"
+        # 3. Atrial Fibrillation (AFib) Detection
+        print("\n=== AFib Debugging ===")
+        print(f"std_rr/mean_rr: {std_rr/mean_rr:.2f} (should be > 0.25)")
+        print(f"RMSSD: {rmssd:.2f} (should be > 50)")
+        print(f"NN50: {nn50:.2f} (should be > 0.5)")
+        print(f"LF/HF Ratio: {lf_hf_ratio:.2f} (should be < 1.5)")
+        p_wave_absent = self._p_wave_absence(signal, peaks)
+        print(f"P-wave Absence: {p_wave_absent} (should be True)")
 
-        # 4. PVC Detection with QRS duration and T-wave polarity
-        if any(rr < 0.6 * mean_rr for rr in rr_intervals):
-            if self._qrs_duration(signal, peaks) > 120:
-                return "Premature Ventricular Contractions (PVC)"
+        afib_criteria = (
+            std_rr / mean_rr > 0.25 and  # High RR interval variability
+            rmssd > 50 and  # High beat-to-beat variability
+            nn50 > 0.5 and  # More than 50% of RR intervals differ by >50ms
+            lf_hf_ratio < 1.5 and  # Low LF/HF ratio
+            self._p_wave_absence(signal, peaks)  # Absence of P-waves
+        )
+
+        if afib_criteria:
+            print("\nAFib Detected!")
+            return "Atrial Fibrillation"
+
+        # 4. PVC Detection
+
+        median_rr = np.median(rr_intervals)
+        short_rr_indices = [i for i, rr in enumerate(rr_intervals) if rr < 0.75 * median_rr]
+
+        # print(f"\n=== PVC DETECTION ===")
+        # print(f"Median RR: {median_rr:.2f} ms")
+        # print(f"Short RR Indices: {short_rr_indices}")
+
+        for i in short_rr_indices:
+            if i + 1 < len(rr_intervals):  # Ensure there's a next RR interval
+                long_rr = rr_intervals[i + 1]  # Check the compensatory pause
+
+                # print(f"Checking PVC at index {i}: Short RR = {rr_intervals[i]:.2f}, Long RR = {long_rr:.2f}")
+
+                if long_rr > 1.4 * median_rr:  # Long pause after short beat
+                    pvc_candidate = peaks[i + 1]
+
+                    # Compare QRS duration
+                    normal_qrs = np.median([self._qrs_duration(signal, [p]) for p in peaks[:-1]])
+                    pvc_qrs = self._qrs_duration(signal, [pvc_candidate])
+
+                    # print(f"Normal QRS Duration: {normal_qrs:.2f}, PVC QRS Duration: {pvc_qrs:.2f}")
+
+                    if pvc_qrs > 1.2 * normal_qrs:
+                        # print("PVC Detected!")
+                        return "Premature Ventricular Contractions (PVC)"
 
         # 5. Bradycardia/Tachycardia
-        hr = 60000 / mean_rr
         if hr < 50:
             return "Sinus Bradycardia"
         elif hr > 100:
@@ -102,27 +158,55 @@ class ECGProcessor:
 
         return "Normal Sinus Rhythm"
 
-    def _has_respiratory_pattern(self, rr_intervals):
-        """Detect the cyclic variation of sinus arrhythmia"""
-        if len(rr_intervals) < 6:
-            return False
-        peaks, _ = find_peaks(rr_intervals, distance=3, prominence=np.std(rr_intervals)/2)
-        return len(peaks) >= 2
+
+    #def _has_respiratory_pattern(self, rr_intervals):
+      #  """Detect cyclic variation in sinus arrhythmia"""
+       # if len(rr_intervals) < 6:
+        #    return False
+        #peaks, _ = find_peaks(rr_intervals, distance=3, prominence=np.std(rr_intervals)/2)
+        #return len(peaks) >= 2
+
+
+
+
 
     def _p_wave_absence(self, signal, peaks):
-        """Check for absence of consistent P waves (AFib indicator)"""
+        """Detect P-wave absence using bandpass filtering (4-8 Hz) and template matching."""
         if len(peaks) < 4:
             return False
-        pr_segments = [np.std(signal[peaks[i-1] + int(0.2 * self.fs):peaks[i] - int(0.05 * self.fs)]) for i in range(1, len(peaks))]
-        return np.mean(pr_segments) > 0.1
+
+        # Bandpass filter for P-wave (4-8 Hz)
+        nyquist = 0.5 * self.fs
+        low, high = 4 / nyquist, 8 / nyquist
+        b, a = butter(3, [low, high], btype='band')
+        filtered_signal = filtfilt(b, a, signal)
+
+        p_wave_energies = []
+
+        for i in range(1, len(peaks)):
+            # Extract segment before the QRS complex (possible P-wave)
+            start = max(0, peaks[i] - int(0.3 * self.fs))  # 300ms before QRS
+            end = peaks[i] - int(0.05 * self.fs)  # 50ms before QRS
+
+            p_wave_segment = filtered_signal[start:end]
+
+            # Compute energy of the P-wave region
+            p_wave_energy = np.sum(p_wave_segment ** 2)
+            p_wave_energies.append(p_wave_energy)
+
+        # AFib: If P-wave energy is consistently low (no distinct peaks)
+        avg_energy = np.mean(p_wave_energies)
+        return avg_energy < 0.01  # Threshold to detect absence of P-waves
+
 
     def _qrs_duration(self, signal, peaks):
-        """Estimate QRS duration by detecting Q and S points"""
+        """Estimate QRS duration more precisely"""
         durations = []
         for peak in peaks:
             if peak > 20 and peak < len(signal) - 20:
-                qrs_segment = signal[peak - 10:peak + 10]
-                durations.append(len(qrs_segment))
+                q_index = np.argmax(np.abs(np.diff(signal[peak-20:peak])))
+                s_index = np.argmax(np.abs(np.diff(signal[peak:peak+20])))
+                durations.append((s_index - q_index) * (1000 / self.fs))
         return np.mean(durations) if durations else 0
 
 
@@ -152,7 +236,7 @@ class AlarmManager:
             # Different alarm levels for different arrhythmias
             if value in ["Tachycardic Atrial Fibrillation", "Atrial Fibrillation"]:
                 return "CRITICAL"
-            elif value in ["Sinus Bradycardia", "Sinus Tachycardia", "Premature Ventricular Contractions"]:
+            elif value in ["Sinus Bradycardia", "Sinus Tachycardia", "Premature Ventricular Contractions (PVC)"]:
                 return "WARNING"
             return "NORMAL"
         else:
@@ -210,7 +294,7 @@ class PatientMonitor(QMainWindow):
         # Load ECG records
         self.ecg_records = []
         try:
-            record_files = glob.glob('Task3_Data/06029_hr.dat')
+            record_files = glob.glob('Task3_Data/00349_hr.dat')
             for file in record_files:
                 self.load_ecg_record(file)
         except Exception as e:
@@ -221,17 +305,17 @@ class PatientMonitor(QMainWindow):
         self.current_index = 0
         self.ecg_index = 0
 
-    def create_simulated_data(self):
+    #def create_simulated_data(self):
         """Create simulated patient data"""
-        self.dataset = pd.DataFrame({
-            "Heart Rate": np.random.randint(60, 100, 100),
-            "Respiratory Rate": np.random.randint(12, 20, 100),
-            "Body Temperature": np.random.uniform(36.0, 37.5, 100),
-            "Oxygen Saturation": np.random.uniform(95.0, 100.0, 100),
-            "Systolic Blood Pressure": np.random.randint(110, 140, 100),
-            "Diastolic Blood Pressure": np.random.randint(70, 90, 100),
-            "Risk Category": np.random.choice(["High Risk", "Low Risk"], 100)
-        })
+     #   self.dataset = pd.DataFrame({
+      #      "Heart Rate": np.random.randint(60, 100, 100),
+       #     "Respiratory Rate": np.random.randint(12, 20, 100),
+        #    "Body Temperature": np.random.uniform(36.0, 37.5, 100),
+        #    "Oxygen Saturation": np.random.uniform(95.0, 100.0, 100),
+         #   "Systolic Blood Pressure": np.random.randint(110, 140, 100),
+          #  "Diastolic Blood Pressure": np.random.randint(70, 90, 100),
+           # "Risk Category": np.random.choice(["High Risk", "Low Risk"], 100)
+        #})
 
     def load_ecg_record(self, file):
         """Load a single ECG record"""
@@ -241,11 +325,11 @@ class PatientMonitor(QMainWindow):
             ecg_signal = record.p_signal[:, 1] if record.p_signal.shape[1] > 1 else record.p_signal[:, 0]
             self.ecg_records.append(ecg_signal)
 
-    def create_simulated_ecg(self):
+    #def create_simulated_ecg(self):
         """Create simulated ECG data"""
-        t = np.linspace(0, 10, 5000)
-        ecg_signal = np.sin(2*np.pi*1.2*t) + 0.25*np.sin(2*np.pi*5*t) + 0.1*np.random.randn(len(t))
-        self.ecg_records.append(ecg_signal)
+     #   t = np.linspace(0, 10, 5000)
+      #  ecg_signal = np.sin(2*np.pi*1.2*t) + 0.25*np.sin(2*np.pi*5*t) + 0.1*np.random.randn(len(t))
+       # self.ecg_records.append(ecg_signal)
 
     def setup_ui(self):
         """Initialize the user interface"""
@@ -271,7 +355,7 @@ class PatientMonitor(QMainWindow):
         self.duration = 5
         self.ecg_window_size = self.fs * self.duration
         self.time_axis = np.linspace(0, self.duration, self.ecg_window_size)
-        self.curve = self.ecg_plot.plot(self.time_axis, np.zeros(self.ecg_window_size), pen='#00FF00')
+        self.curve = self.ecg_plot.plot(self.time_axis,y=np.zeros(self.ecg_window_size), pen='#00FF00')
 
     def setup_ecg_panel(self, main_layout):
         """Setup the ECG display panel"""
@@ -287,8 +371,10 @@ class PatientMonitor(QMainWindow):
         self.ecg_plot.setBackground('k')
         self.ecg_plot.showGrid(x=True, y=True, alpha=0.3)
         self.ecg_plot.setLabel('left', 'Amplitude (mV)')
-        self.ecg_plot.setLabel('bottom', 'Time (s)')
+        # self.ecg_plot.setLabel('bottom', 'Time (s)')
         self.ecg_plot.setYRange(-2, 2)
+        self.ecg_plot.showAxis('bottom', show=False)
+
         left_panel.addWidget(self.ecg_plot)
 
         main_layout.addLayout(left_panel, 2)

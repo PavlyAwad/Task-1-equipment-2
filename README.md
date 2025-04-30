@@ -25,7 +25,7 @@ This project presents a real-time Patient Monitoring System equipped with a Grap
 
 | Real-Time ECG Display | Arrhythmia Alert |
 |------------------------|------------------|
-| ![ECG Screenshot]((https://github.com/PavlyAwad/Task1-PatientMonitor/blob/1beb6f981db4d6721cb50c58e029ad725292282f/Snapshhoots/Advanced%20Patient%20Monitor%201.png)) | ![Alert Screenshot](images/arrhythmia_alert.png) |
+| ![ECG Screenshot](Snapshhoots/Advanced Patient Monitor 1.png) | ![Alert Screenshot](Snapshhoots/Advanced Patient Monitor 2.png) |
 
 
 ---
@@ -43,15 +43,13 @@ Each arrhythmia is classified using a machine learning model trained on preproce
 ## 🛠️ How to Run
 ```bash
 # Clone the repository
-$ git clone https://github.com/yourusername/patient-monitor.git
-$ cd patient-monitor
-
+$ git clone https://github.com/PavlyAwad/Task1-PatientMonitor.git
 
 # Run the application
 $ python main.py
 ```
 
-> Place ECG signal files in the `/data` directory, or connect a live ECG source if supported.
+> Place ECG signal files in the `/ECG Data` directory, or connect a live ECG source if supported.
 
 ---
 

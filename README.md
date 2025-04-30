@@ -25,7 +25,7 @@ This project presents a real-time Patient Monitoring System equipped with a Grap
 
 | Real-Time ECG Display | Arrhythmia Alert |
 |------------------------|------------------|
-| ![ECG Screenshot](images/ecg_display.png) | ![Alert Screenshot](images/arrhythmia_alert.png) |
+| ![ECG Screenshot]((https://github.com/PavlyAwad/Task1-PatientMonitor/blob/1beb6f981db4d6721cb50c58e029ad725292282f/Snapshhoots/Advanced%20Patient%20Monitor%201.png)) | ![Alert Screenshot](images/arrhythmia_alert.png) |
 
 
 ---

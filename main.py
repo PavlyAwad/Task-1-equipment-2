@@ -93,13 +93,7 @@ class ECGProcessor:
         print(f"\n=== QRS AMPLITUDE ===")
         print(f"Avg QRS Amplitude: {avg_amplitude:.4f}")
 
-        # 1. Low Voltage QRS
-        #if avg_amplitude < 0.5 and 50 < hr < 100 and std_rr / mean_rr < 0.1:
-            #return "Sinus Rhythm with Low Voltage"
 
-        # # 2. Sinus Arrhythmia
-        # if 0.1 < std_rr / mean_rr < 0.2 and 50 < hr < 100 and self._has_respiratory_pattern(rr_intervals):
-        #     return "Sinus Arrhythmia"
 
         # 3. Atrial Fibrillation (AFib) Detection
         print("\n=== AFib Debugging ===")
@@ -127,9 +121,7 @@ class ECGProcessor:
         median_rr = np.median(rr_intervals)
         short_rr_indices = [i for i, rr in enumerate(rr_intervals) if rr < 0.75 * median_rr]
 
-        # print(f"\n=== PVC DETECTION ===")
-        # print(f"Median RR: {median_rr:.2f} ms")
-        # print(f"Short RR Indices: {short_rr_indices}")
+
 
         for i in short_rr_indices:
             if i + 1 < len(rr_intervals):  # Ensure there's a next RR interval
@@ -157,17 +149,6 @@ class ECGProcessor:
             return "Sinus Tachycardia"
 
         return "Normal Sinus Rhythm"
-
-
-    #def _has_respiratory_pattern(self, rr_intervals):
-      #  """Detect cyclic variation in sinus arrhythmia"""
-       # if len(rr_intervals) < 6:
-        #    return False
-        #peaks, _ = find_peaks(rr_intervals, distance=3, prominence=np.std(rr_intervals)/2)
-        #return len(peaks) >= 2
-
-
-
 
 
     def _p_wave_absence(self, signal, peaks):
@@ -294,7 +275,7 @@ class PatientMonitor(QMainWindow):
         # Load ECG records
         self.ecg_records = []
         try:
-            record_files = glob.glob('Task3_Data/00349_hr.dat')
+            record_files = glob.glob('ECG Data/06002_hr.dat')
             for file in record_files:
                 self.load_ecg_record(file)
         except Exception as e:
@@ -307,15 +288,7 @@ class PatientMonitor(QMainWindow):
 
     #def create_simulated_data(self):
         """Create simulated patient data"""
-     #   self.dataset = pd.DataFrame({
-      #      "Heart Rate": np.random.randint(60, 100, 100),
-       #     "Respiratory Rate": np.random.randint(12, 20, 100),
-        #    "Body Temperature": np.random.uniform(36.0, 37.5, 100),
-        #    "Oxygen Saturation": np.random.uniform(95.0, 100.0, 100),
-         #   "Systolic Blood Pressure": np.random.randint(110, 140, 100),
-          #  "Diastolic Blood Pressure": np.random.randint(70, 90, 100),
-           # "Risk Category": np.random.choice(["High Risk", "Low Risk"], 100)
-        #})
+
 
     def load_ecg_record(self, file):
         """Load a single ECG record"""
@@ -325,11 +298,7 @@ class PatientMonitor(QMainWindow):
             ecg_signal = record.p_signal[:, 1] if record.p_signal.shape[1] > 1 else record.p_signal[:, 0]
             self.ecg_records.append(ecg_signal)
 
-    #def create_simulated_ecg(self):
-        """Create simulated ECG data"""
-     #   t = np.linspace(0, 10, 5000)
-      #  ecg_signal = np.sin(2*np.pi*1.2*t) + 0.25*np.sin(2*np.pi*5*t) + 0.1*np.random.randn(len(t))
-       # self.ecg_records.append(ecg_signal)
+
 
     def setup_ui(self):
         """Initialize the user interface"""
